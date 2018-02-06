@@ -1,0 +1,46 @@
+From: Oliver Kowalke <olli@boost.org>
+Date: 2013-04-03 14:12:25+02:00
+Subject: Fix ppc64 assembler code in context
+Upstream: boost#8374 
+
+
+Compiling libs/context/src/asm/make_ppc64_sysv_elf_gas.S failed with:
+
+libs/context/src/asm/make_ppc64_sysv_elf_gas.S: Assembler messages:
+libs/context/src/asm/make_ppc64_sysv_elf_gas.S:102: Error: operand out of range (59 is not between 0 and 31)
+libs/context/src/asm/make_ppc64_sysv_elf_gas.S:108: Error: operand out of range (64 is not between 0 and 31)
+libs/context/src/asm/make_ppc64_sysv_elf_gas.S:131: Error: syntax error; found @', expected ,'
+libs/context/src/asm/make_ppc64_sysv_elf_gas.S:131: Error: junk at end of line: `@plt'
+
+---
+ libs/context/src/asm/make_ppc64_sysv_elf_gas.S |    7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+Index: libs/context/src/asm/make_ppc64_sysv_elf_gas.S
+===================================================================
+--- libs/context/src/asm/make_ppc64_sysv_elf_gas.S.orig	2012-11-30 08:38:52.000000000 +0100
++++ libs/context/src/asm/make_ppc64_sysv_elf_gas.S	2013-04-03 14:10:43.651126381 +0200
+@@ -99,13 +99,13 @@ make_fcontext:
+ 
+     # call align_stack, R3 contains address at 16 byte boundary after return
+     # == pointer to fcontext_t and address of context stack
+-    rlwinm  %r3, %r3, 0, 0, 59
++    clrrdi  %r3, %r3, 4
+ 
+     std     %r0, 184(%r3)       # save address of context stack (base) in fcontext_t
+     std     %r4, 192(%r3)       # save context stack size in fcontext_t
+     std     %r5, 176(%r3)       # save address of context function in fcontext_t
+ 
+-    subf    %r0, %r3, 64        # 64 bytes on stack for parameter area (== 8 registers)
++    subi    %r0, %r3, 64        # 64 bytes on stack for parameter area (== 8 registers)
+     std     %r0, 152(%r3)       # save the stack base
+ 
+     mflr    %r0                 # load LR
+@@ -128,5 +128,6 @@ finish:
+     stwu    %r1, -32(%r1)       # allocate stack space, SP % 16 == 0
+ 
+     li      %r3,  0             # set return value to zero
+-    bl      _exit@plt           # exit application
++    bl      _exit               # exit application
++    nop
+ .size .make_fcontext, .-.make_fcontext

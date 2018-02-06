@@ -1,0 +1,184 @@
+#
+# Was used on boost.spec
+#
+--- boost.spec	2014-12-17 13:56:13.293444586 +0100
++++ boost.spec.gnb	2014-12-17 13:55:32.801894002 +0100
+@@ -20,6 +20,7 @@
+ %define file_version 1_53_0
+ %define short_version 1_53
+ %define lib_appendix 1_53_0
++%define pkg_short_version 153
+ 
+ #Only define to 1 to generate the man pages
+ %define build_docs 0
+@@ -34,7 +35,7 @@
+ %ifarch s390 s390x ia64 hppa
+ %define build_mpi 0
+ %else
+-%define build_mpi 1
++%define build_mpi 0
+ %endif
+ 
+ # context hasn't been ported to most architectures yet
+@@ -68,16 +69,22 @@
+ 
+ %define debug_package_requires %{all_libs}
+ 
+-Name:           boost
+-BuildRequires:  boost-jam >= 3.1.19
++Name:           boost%{?pkg_short_version}
+ BuildRequires:  chrpath
+ BuildRequires:  dos2unix
+ BuildRequires:  gcc-c++
++%if 0%{?suse_version}
+ BuildRequires:  libbz2-devel
+ BuildRequires:  libexpat-devel
+-BuildRequires:  libicu-devel >= 4.4
+-BuildRequires:  python-devel
+ BuildRequires:  xorg-x11-devel
++%else
++BuildRequires:  bzip2-devel
++BuildRequires:  zlib-devel
++BuildRequires:  expat-devel
++BuildRequires:  xorg-x11-proto-devel
++%endif
++BuildRequires:  libicu-devel
++BuildRequires:  python-devel
+ %if %build_mpi
+ BuildRequires:  openmpi-devel
+ %endif
+@@ -89,7 +96,7 @@
+ BuildRequires:  python-devel
+ BuildRequires:  texlive-latex
+ %endif
+-%if 0%suse_version > 1020
++%if 0%{?suse_version} > 1020
+ BuildRequires:  fdupes
+ %endif
+ Url:            http://www.boost.org
+@@ -99,10 +106,10 @@
+ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
+ Version:        1.53.0
+ Release:        0
+-Source0:        http://downloads.sourceforge.net/project/boost/boost/1.53.0/%{name}_%{file_version}.tar.bz2
++Source0:        http://downloads.sourceforge.net/project/boost/boost/1.53.0/boost_%{file_version}.tar.bz2
+ Source1:        boost-rpmlintrc
+-Source2:        %{name}_%{short_version}_man.tar.bz2
+-Source3:        %{name}_%{short_version}_pdf.tar.bz2
++Source2:        boost_%{short_version}_man.tar.bz2
++Source3:        boost_%{short_version}_pdf.tar.bz2
+ Source4:        existing_extra_docs
+ #Source5:        NEWS
+ Patch1:         boost-thread.patch
+@@ -113,7 +120,9 @@
+ #PATCH-FIX-UPSTREAM Fix erroneous assembler code for ppc64 [boost#8374]
+ Patch51:        boost-fix_ppc64_asm.patch
+ Patch60:        boost-glibc-2.18.patch
++%if 0%{?suse_version}
+ Recommends:     %{all_libs}
++%endif
+ 
+ %define _docdir %{_datadir}/doc/packages/boost-%{version}
+ 
+@@ -393,9 +402,9 @@
+ 
+ %prep
+ %if %build_docs
+-%setup -q -n %{name}_%{file_version} -b 3
++%setup -q -n boost_%{file_version} -b 3
+ %else
+-%setup -q -n %{name}_%{file_version} -a 2 -b 3
++%setup -q -n boost_%{file_version} -a 2 -b 3
+ %endif
+ #everything in the tarball has the executable flag set ...
+ find -type f ! \( -name \*.sh -o -name \*.py -o -name \*.pl \) -exec chmod -x {} +
+@@ -501,7 +510,7 @@
+ 	--prefix=%{buildroot}%{_prefix} \
+ 	--exec-prefix=$%{buildroot}%{_prefix} \
+ 	--libdir=%{buildroot}%{_libdir} \
+-	--includedir=%{buildroot}%{_includedir} \
++	--includedir=%{buildroot}%{_includedir}/%{name} \
+ 	install || echo "Not all Boost libraries built properly."
+ 
+ mkdir -p %{buildroot}%{_docdir}
+@@ -509,11 +518,18 @@
+ pushd %{buildroot}%{_libdir}
+ blibs=$(find . -name \*.so.%{version})
+ echo $blibs | xargs chrpath -d 
++popd
++
++mkdir -p %{buildroot}%{_libdir}/%{name}
+ 
++pushd %{buildroot}%{_libdir}/%{name}
+ for lib in ${blibs}; do
+   BASE=$(basename ${lib} .so.%{version})
++  REAL=../$BASE.so.%{version}
+   SONAME_MT="$BASE-mt.so"
+-  ln -sf ${lib} $SONAME_MT
++  ln -sf $REAL $BASE.so
++  ln -sf $REAL $SONAME_MT
++  rm -f ../$BASE.so
+ done
+ popd
+ 
+@@ -529,10 +545,11 @@
+ rm -f *.manifest
+ tar -cf - .| tar -C %{buildroot}/%{_mandir} -xvf -
+ popd
++find %buildroot/%{_mandir} -type f -print0 | xargs -0 gzip
+ 
+ #install the pdf documentation
+ install -d %buildroot/%{_docdir}/pdf
+-install -p -m 644 ../%{name}_%{short_version}_pdf/*.pdf %{buildroot}/%{_docdir}/pdf/
++install -p -m 644 ../boost_%{short_version}_pdf/*.pdf %{buildroot}/%{_docdir}/pdf/
+ 
+ #install doc files
+ dos2unix libs/ptr_container/doc/tutorial_example.html \
+@@ -545,15 +562,15 @@
+ find . -name \*.htm\* -o -name \*.gif -o -name \*.css -o -name \*.jpg -o -name \*.png -o -name \*.ico | \\
+ 	tar --files-from=%{S:4} -cf - --files-from=- | tar -C %{buildroot}%{_docdir} -xf -
+ rm -rf %{buildroot}%{_docdir}/boost
+-ln -s /usr/include/boost %{buildroot}%{_docdir}
+-ln -s ../LICENSE_1_0.txt %{buildroot}%{_docdir}/libs
++ln -s /usr/include/%{name}/boost %{buildroot}%{_docdir}
++cp LICENSE_1_0.txt %{buildroot}%{_docdir}
+ #Copy the news file.
+ #cp %%{S:5} %%{buildroot}%%{_docdir}
+ #only for documentation, doesn't need to be executable
+ find %{buildroot}%{_docdir} -name \*.py -exec chmod -x {} +
+ rm -f %{buildroot}%{_libdir}/*.a
+ #symlink dupes
+-%if 0%suse_version > 1020
++%if 0%{?suse_version} > 1020
+ %fdupes %buildroot
+ %endif
+ 
+@@ -613,7 +630,7 @@
+ %defattr(-, root, root, -)
+ %dir %{_docdir}
+ #%%doc %%{_docdir}/NEWS
+-%doc %{_docdir}/LICENSE_1_0.txt
++#%doc %{_docdir}/LICENSE_1_0.txt
+ 
+ %files -n libboost_atomic%{lib_appendix}
+ %defattr(-, root, root, -)
+@@ -708,8 +725,8 @@
+ 
+ %files devel
+ %defattr(-, root, root, -)
+-%{_includedir}/boost
+-%{_libdir}/*.so
++%{_includedir}/%{name}
++%{_libdir}/%{name}
+ %if %build_mpi
+ %exclude %{_libdir}/mpi.so
+ %endif
+@@ -719,7 +736,7 @@
+ %defattr(-, root, root, -)
+ %doc %{_docdir}/*
+ %exclude %{_docdir}/pdf
+-%exclude %{_docdir}/LICENSE_1_0.txt
++#%exclude %{_docdir}/LICENSE_1_0.txt
+ 
+ %files doc-man
+ %defattr(644, root, root, -)
